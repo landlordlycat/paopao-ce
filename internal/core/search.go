@@ -1,7 +1,12 @@
+// Copyright 2022 ROC. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 package core
 
 import (
-	"github.com/rocboss/paopao-ce/internal/model"
+	"github.com/rocboss/paopao-ce/internal/core/ms"
+	"github.com/rocboss/paopao-ce/internal/dao/jinzhu/dbr"
 )
 
 const (
@@ -9,25 +14,40 @@ const (
 	SearchTypeTag     SearchType = "tag"
 )
 
-type SearchType string
+const (
+	PostVisitPublic    = dbr.PostVisitPublic
+	PostVisitPrivate   = dbr.PostVisitPrivate
+	PostVisitFriend    = dbr.PostVisitFriend
+	PostVisitFollowing = dbr.PostVisitFollowing
+)
 
-type QueryReq struct {
-	Query      string
-	Visibility []model.PostVisibleT
-	Type       SearchType
-}
+type (
+	// PostVisibleT 可访问类型，可见性: 0私密 10充电可见 20订阅可见 30保留 40保留 50好友可见 60关注可见 70保留 80保留 90公开
+	PostVisibleT = dbr.PostVisibleT
 
-type QueryResp struct {
-	Items []*model.PostFormated
-	Total int64
-}
+	SearchType string
 
-type DocItems []map[string]interface{}
+	QueryReq struct {
+		Query      string
+		Visibility []PostVisibleT
+		Type       SearchType
+	}
+
+	QueryResp struct {
+		Items []*ms.PostFormated
+		Total int64
+	}
+
+	TsDocItem struct {
+		Post    *ms.Post
+		Content string
+	}
+)
 
 // TweetSearchService tweet search service interface
 type TweetSearchService interface {
 	IndexName() string
-	AddDocuments(documents DocItems, primaryKey ...string) (bool, error)
+	AddDocuments(data []TsDocItem, primaryKey ...string) (bool, error)
 	DeleteDocuments(identifiers []string) error
-	Search(user *model.User, q *QueryReq, offset, limit int) (*QueryResp, error)
+	Search(user *ms.User, q *QueryReq, offset, limit int) (*QueryResp, error)
 }

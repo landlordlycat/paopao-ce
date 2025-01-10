@@ -37,7 +37,7 @@
             </div>
 
             <template #footer>
-                <div class="pagination-wrap" v-if="totalPage > 0">
+                <div class="pagination-wrap" v-if="totalPage > 1">
                     <n-pagination
                         :page="page"
                         @update:page="updatePage"
@@ -322,6 +322,9 @@ onMounted(() => {
 .dark {
     .income {
         color: #63e2b7;
+    }
+    .main-content-wrap {
+        background-color: rgba(16, 16, 20, 0.75);
     }
 }
 </style>

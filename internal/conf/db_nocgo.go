@@ -1,3 +1,7 @@
+// Copyright 2022 ROC. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 //go:build !cgo
 // +build !cgo
 
@@ -15,8 +19,9 @@ const (
 	sqlite3InCgoEnabled = false
 )
 
-func OpenSqlite3() (*sql.DB, error) {
-	return sql.Open("sqlite", Sqlite3Setting.Dsn("sqlite"))
+func OpenSqlite3() (string, *sql.DB, error) {
+	db, err := sql.Open("sqlite", Sqlite3Setting.Dsn("sqlite"))
+	return "sqlite", db, err
 }
 
 func gormOpenSqlite3(opts ...gorm.Option) (*gorm.DB, error) {

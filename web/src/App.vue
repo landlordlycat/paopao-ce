@@ -4,11 +4,13 @@
             <n-dialog-provider>
                 <div
                     class="app-container"
-                    :class="{ dark: theme?.name === 'dark' }"
+                    :class="{ dark: theme?.name === 'dark', mobile: !store.state.desktopModelShow }"
                 >
-                    <div has-sider class="main-wrap" position="static">
+                    <div has-sider class="main-wrap" position="static" >
                         <!-- 侧边栏 -->
-                        <sidebar />
+                        <div v-if="store.state.desktopModelShow">
+                            <sidebar />
+                        </div>
 
                         <div class="content-wrap">
                             <router-view
@@ -41,21 +43,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { onMounted, computed } from 'vue';
 import { useStore } from 'vuex';
 import { darkTheme } from 'naive-ui';
-import { version, buildTime } from '../build/info.json';
+import { getSiteProfile } from '@/api/site';
 
 const store = useStore();
 const theme = computed(() => (store.state.theme === 'dark' ? darkTheme : null));
 
-console.log(
-    `%c Release Build Info 
-%cVersion			v${version}
-BuildTime		${buildTime}`,
-    'background:#000;color:#FFF;font-weight:bold;',
-    'background:#FFF;color:#000;'
-);
+function loadSiteProfile() {
+    store.commit('loadDefaultSiteProfile');
+    if (import.meta.env.VITE_USE_WEB_PROFILE.toLowerCase() === "true") {
+        getSiteProfile().then((res) => {
+            store.commit('updateSiteProfile', res);
+        }).catch((err) => {
+            console.log(err);
+        });
+    }
+}
+
+onMounted(() => {
+   loadSiteProfile();
+});
 </script>
 
 <style lang="less">
