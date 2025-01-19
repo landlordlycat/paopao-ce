@@ -1,5 +1,7 @@
+# syntax=docker/dockerfile:1
+
 # build frontend
-FROM node:18-alpine as frontend
+FROM node:19-alpine AS frontend
 ARG API_HOST
 ARG USE_API_HOST=yes
 ARG EMBED_UI=yes
@@ -10,37 +12,42 @@ RUN [ $EMBED_UI != yes ] || [ $USE_API_HOST != yes ] || echo "VITE_HOST='$API_HO
 RUN [ $EMBED_UI != yes ] || [ $USE_DIST != no ] || (yarn && yarn build)
 RUN [ $EMBED_UI = yes ] || mkdir dist || echo ""
 
-# build backend
-FROM golang:1.18-alpine AS backend
+# build go mod cache
+FROM bitbus/paopao-ce-backend-builder:latest AS gomodcache
 ARG API_HOST
 ARG USE_API_HOST=yes
 ARG EMBED_UI=yes
 ARG USE_DIST=no
-RUN apk --no-cache --no-progress add --virtual \
-  build-deps \
-  build-base \
-  git
+ENV GOPROXY=https://goproxy.cn,direct
+WORKDIR /paopao-ce
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
 
+# build backend
+FROM gomodcache AS backend
+ARG API_HOST
+ARG USE_API_HOST=yes
+ARG EMBED_UI=yes
+ARG USE_DIST=no
 WORKDIR /paopao-ce
 COPY . .
 COPY --from=frontend /web/dist ./web/dist
-ENV GOPROXY=https://goproxy.cn
-RUN [ $EMBED_UI != yes ] || make build TAGS='embed jsoniter'
-RUN [ $EMBED_UI = yes ] || make build TAGS='jsoniter'
+ENV GOPROXY=https://goproxy.cn,direct
+RUN [ $EMBED_UI != yes ] || make build TAGS='go_json'
+RUN [ $EMBED_UI = yes ] || make build TAGS='slim embed go_json'
 
-FROM alpine:3.16
+FROM bitbus/paopao-ce-backend-runner:latest
 ARG API_HOST
 ARG USE_API_HOST=yes
 ARG EMBED_UI=yes
 ARG USE_DIST=no
 ENV TZ=Asia/Shanghai
-RUN apk update && apk add --no-cache ca-certificates && update-ca-certificates
-
 WORKDIR /app/paopao-ce
-COPY --from=backend /paopao-ce/release/paopao-ce .
-COPY configs ./configs
-
-VOLUME ["/app/paopao-ce/configs"]
+COPY --from=backend /paopao-ce/release/paopao .
+COPY --from=backend /paopao-ce/config.yaml.sample config.yaml
+VOLUME ["/app/paopao-ce/custom"]
 EXPOSE 8008
-HEALTHCHECK --interval=5s --timeout=3s  --retries=3  CMD ps -ef | grep paopao-ce || exit 1
-ENTRYPOINT ["/app/paopao-ce/paopao-ce"]
+HEALTHCHECK --interval=5s --timeout=3s  --retries=3  CMD ps -ef | grep paopao || exit 1
+ENTRYPOINT ["/app/paopao-ce/paopao"]
+CMD ["serve"]

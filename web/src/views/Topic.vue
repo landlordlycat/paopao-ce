@@ -6,47 +6,64 @@
             <n-tabs type="line" animated @update:value="changeTab">
                 <n-tab-pane name="hot" tab="热门" />
                 <n-tab-pane name="new" tab="最新" />
+                <n-tab-pane name="follow" tab="关注" v-if="store.state.userLogined" />
+                <n-tab-pane name="pin" tab="钉住" v-if="store.state.userLogined" />
+                <template v-if="store.state.userLogined" #suffix>
+                    <n-tag v-model:checked="tagsChecked" checkable>
+                        {{tagsEditText}}
+                    </n-tag>
+                </template>
             </n-tabs>
             <n-spin :show="loading">
                 <n-space>
-                    <n-tag
-                        class="tag-item"
-                        type="success"
-                        round
+                    <tag-item
                         v-for="tag in tags"
-                        :key="tag.id"
+                        :tag="tag"
+                        :showAction="store.state.userLogined && tagsChecked"
+                        :checkFollowing="inFollowTab"
+                        :checkPin="inPinTab"
                     >
-                        <router-link
-                            class="hash-link"
-                            :to="{
-                                name: 'home',
-                                query: {
-                                    q: tag.tag,
-                                    t: 'tag',
-                                },
-                            }"
-                        >
-                            #{{ tag.tag }}
-                        </router-link>
-                        <span class="tag-hot">({{ tag.quote_num }})</span>
-                        <template #avatar>
-                            <n-avatar :src="tag.user.avatar" />
-                        </template>
-                    </n-tag>
+                    </tag-item>
                 </n-space>
+                <div class="empty-wrap" v-if="tags.length === 0">
+                    <n-empty size="large" description="暂无数据" />
+                </div>
             </n-spin>
         </n-list>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, watch} from 'vue';
 import { getTags } from '@/api/post';
+import { useStore } from 'vuex';
 
+const store = useStore();
 const tags = ref<Item.TagProps[]>([]);
-const tagType = ref<"hot" | "new">('hot');
+const tagType = ref<"hot" | "new" | "follow" | "pin">('hot');
 const loading = ref(false);
+const tagsChecked = ref(false)
+const inFollowTab = ref(false)
+const inPinTab = ref(false)
 
+watch(tagsChecked, () => {
+    if (!tagsChecked.value) {
+        window.$message.success("保存成功");
+        store.commit("refreshTopicFollow")
+    }
+});
+const tagsEditText = computed({  
+    get: () => {  
+        let text = "编辑";
+        if (tagsChecked.value) {
+            text = "保存";
+        }
+        return text;
+    },
+    set: (newVal) => {
+        // do nothing
+    },
+});
 const loadTags = () => {
     loading.value = true;
     getTags({
@@ -54,15 +71,19 @@ const loadTags = () => {
         num: 50,
     })
         .then((res) => {
-            tags.value = res;
+            tags.value = res.topics;
             loading.value = false;
         })
         .catch((err) => {
+            tags.value = [];
+            console.log(err);
             loading.value = false;
         });
 };
-const changeTab = (tab: "hot" | "new") => {
+const changeTab = (tab: "hot" | "new" | "follow" | "pin") => {
     tagType.value = tab;
+    inFollowTab.value = (tab === "follow")
+    inPinTab.value = (tab === "pin")
     loadTags();
 };
 onMounted(() => {
@@ -73,12 +94,10 @@ onMounted(() => {
 <style lang="less" scoped>
 .tags-wrap {
     padding: 20px;
-    .tag-item {
-        .tag-hot {
-            margin-left: 12px;
-            font-size: 12px;
-            opacity: 0.75;
-        }
+}
+.dark {
+    .tags-wrap, .empty-wrap {
+        background-color: rgba(16, 16, 20, 0.75);
     }
 }
 </style>

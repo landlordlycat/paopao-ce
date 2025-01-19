@@ -12,7 +12,52 @@
     >
         <div class="auth-wrap">
             <n-card :bordered="false">
+                <div v-if="!store.state.profile.allowUserRegister">
+                    <n-space justify="center"><n-h3><n-text type="success">账号登录</n-text></n-h3></n-space>
+                    <n-form
+                            ref="loginRef"
+                            :model="loginForm"
+                            :rules="{
+                                username: {
+                                    required: true,
+                                    message: '请输入账户名',
+                                },
+                                password: {
+                                    required: true,
+                                    message: '请输入密码',
+                                },
+                            }"
+                        >
+                            <n-form-item-row label="账户" path="username">
+                                <n-input
+                                    v-model:value="loginForm.username"
+                                    placeholder="请输入用户名"
+                                    @keyup.enter.prevent="handleLogin"
+                                />
+                            </n-form-item-row>
+                            <n-form-item-row label="密码" path="password">
+                                <n-input
+                                    type="password"
+                                    show-password-on="mousedown"
+                                    v-model:value="loginForm.password"
+                                    placeholder="请输入账户密码"
+                                    @keyup.enter.prevent="handleLogin"
+                                />
+                            </n-form-item-row>
+                        </n-form>
+                        <n-button
+                            type="primary"
+                            block
+                            secondary
+                            strong
+                            :loading="loading"
+                            @click="handleLogin"
+                        >
+                            登录
+                        </n-button>
+                </div>
                 <n-tabs
+                    v-if="store.state.profile.allowUserRegister" 
                     :default-value="store.state.authModelTab"
                     size="large"
                     justify-content="space-evenly"
@@ -180,6 +225,7 @@ const handleLogin = (e: Event) => {
 
                     store.commit('updateUserinfo', res);
                     store.commit('triggerAuth', false);
+                    store.commit('refresh')
                     loginForm.username = '';
                     loginForm.password = '';
                 })
@@ -252,5 +298,10 @@ onMounted(() => {
 <style lang="less" scoped>
 .auth-wrap {
     margin-top: -30px;
+}
+.dark {
+    .auth-wrap {
+        background-color: rgba(16, 16, 20, 0.75);
+    }
 }
 </style>

@@ -1,3 +1,7 @@
+// Copyright 2022 ROC. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 package app
 
 import (
@@ -5,7 +9,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rocboss/paopao-ce/pkg/errcode"
+	"github.com/rocboss/paopao-ce/pkg/xerror"
 )
 
 type Response struct {
@@ -22,7 +26,7 @@ func NewResponse(ctx *gin.Context) *Response {
 	return &Response{Ctx: ctx}
 }
 
-func (r *Response) ToResponse(data interface{}) {
+func (r *Response) ToResponse(data any) {
 	hostname, _ := os.Hostname()
 	if data == nil {
 		data = gin.H{
@@ -41,7 +45,7 @@ func (r *Response) ToResponse(data interface{}) {
 	r.Ctx.JSON(http.StatusOK, data)
 }
 
-func (r *Response) ToResponseList(list interface{}, totalRows int64) {
+func (r *Response) ToResponseList(list any, totalRows int64) {
 	r.ToResponse(gin.H{
 		"list": list,
 		"pager": Pager{
@@ -52,12 +56,12 @@ func (r *Response) ToResponseList(list interface{}, totalRows int64) {
 	})
 }
 
-func (r *Response) ToErrorResponse(err *errcode.Error) {
-	response := gin.H{"code": err.Code(), "msg": err.Msg()}
+func (r *Response) ToErrorResponse(err *xerror.Error) {
+	response := gin.H{"code": err.StatusCode(), "msg": err.Msg()}
 	details := err.Details()
 	if len(details) > 0 {
 		response["details"] = details
 	}
 
-	r.Ctx.JSON(err.StatusCode(), response)
+	r.Ctx.JSON(xerror.HttpStatusCode(err), response)
 }

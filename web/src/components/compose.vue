@@ -37,6 +37,7 @@
                 :data="{
                     type: uploadType,
                 }"
+                :file-list="fileQueue"
                 @before-upload="beforeUpload"
                 @finish="finishUpload"
                 @error="failUpload"
@@ -74,8 +75,8 @@
                         </n-upload-trigger>
 
                         <n-upload-trigger
-                            v-if="allowTweetVideo"
-                            #="{ handleClick }" abstract>
+                          v-if="store.state.profile.allowTweetVideo"
+                          #="{ handleClick }" abstract>
                             <n-button
                                 :disabled="
                                     (fileQueue.length > 0 &&
@@ -104,8 +105,8 @@
                         </n-upload-trigger>
 
                         <n-upload-trigger
-                            v-if="allowTweetAttachment"
-                            #="{ handleClick }" abstract>
+                          v-if="store.state.profile.allowTweetAttachment"
+                          #="{ handleClick }" abstract>
                             <n-button
                                 :disabled="
                                     (fileQueue.length > 0 &&
@@ -170,10 +171,10 @@
                                     :show-indicator="false"
                                     status="success"
                                     :stroke-width="10"
-                                    :percentage="(content.length / 200) * 100"
+                                    :percentage="(content.length / store.state.profile.defaultTweetMaxLength) * 100"
                                 />
                             </template>
-                            {{ content.length }} / 200
+                            已输入{{ content.length }}字
                         </n-tooltip>
 
                         <n-button
@@ -195,7 +196,7 @@
                         v-if="attachmentContents.length > 0"
                     >
                         <n-input-number
-                            v-if="allowTweetAttachmentPrice"
+                            v-if="store.state.profile.allowTweetAttachmentPrice"
                             v-model:value="attachmentPrice"
                             :min="0"
                             :max="100000"
@@ -209,18 +210,7 @@
                 </div>
             </n-upload>
 
-            <div class="link-wrap" v-if="showLinkSet">
-                <n-dynamic-input
-                    v-model:value="links"
-                    placeholder="请输入以http(s)://开头的链接"
-                    :min="0"
-                    :max="3"
-                >
-                    <template #create-button-default> 创建链接 </template>
-                </n-dynamic-input>
-            </div>
-
-             <div class="eye-wrap" v-if="showEyeSet">
+            <div class="eye-wrap" v-if="showEyeSet">
                 <n-radio-group v-model:value="visitType" name="radiogroup">
                     <n-space>
                         <n-radio
@@ -232,13 +222,35 @@
                     </n-space>
                 </n-radio-group>
             </div>
+
+            <div class="link-wrap" v-if="showLinkSet">
+                <n-dynamic-input
+                    v-model:value="links"
+                    placeholder="请输入以http(s)://开头的链接"
+                    :min="0"
+                    :max="3"
+                >
+                    <template #create-button-default> 创建链接 </template>
+                </n-dynamic-input>
+            </div>
         </div>
 
         <div class="compose-wrap" v-else>
             <div class="login-wrap">
                 <span class="login-banner"> 登录后，精彩更多</span>
             </div>
-            <div class="login-wrap">
+            <div v-if="!store.state.profile.allowUserRegister" class="login-only-wrap">
+                <n-button
+                    strong
+                    secondary
+                    round
+                    type="primary"
+                    @click="triggerAuth('signin')"
+                >
+                    登录
+                </n-button>
+            </div>
+            <div v-if="store.state.profile.allowUserRegister" class="login-wrap">
                 <n-button
                     strong
                     secondary
@@ -262,9 +274,8 @@
     </div>
 </template>
 
-
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import { debounce } from 'lodash';
 import { getSuggestUsers, getSuggestTags } from '@/api/user';
@@ -278,10 +289,9 @@ import {
 } from '@vicons/ionicons5';
 import { createPost } from '@/api/post';
 import { parsePostTag } from '@/utils/content';
+import { isZipFile } from '@/utils/isZipFile';
 import type { MentionOption, UploadFileInfo, UploadInst } from 'naive-ui';
 import { VisibilityEnum, PostItemTypeEnum } from '@/utils/IEnum';
-
-
 
 const emit = defineEmits<{
     (e: 'post-success', post: Item.PostProps): void;
@@ -305,19 +315,26 @@ const imageContents = ref<Item.CommentItemProps[]>([]);
 const videoContents = ref<Item.CommentItemProps[]>([]);
 const attachmentContents = ref<Item.AttachmentProps[]>([]);
 const visitType = ref<VisibilityEnum>(VisibilityEnum.PUBLIC);
-const defaultVisitType = ref<VisibilityEnum>(VisibilityEnum.FRIEND)
-const visibilities = [
-    {value: VisibilityEnum.PUBLIC, label: "公开"}
-    , {value: VisibilityEnum.PRIVATE, label: "私密"}
-    , {value: VisibilityEnum.FRIEND, label: "好友可见"}
-];
+const defaultVisitType = ref<VisibilityEnum>(VisibilityEnum.PUBLIC)
 
-const allowTweetVideo = (import.meta.env.VITE_ALLOW_TWEET_VIDEO.toLocaleLowerCase() === 'true')
-const allowTweetAttachment = (import.meta.env.VITE_ALLOW_TWEET_ATTACHMENT.toLocaleLowerCase() === 'true')
-const allowTweetAttachmentPrice = (import.meta.env.VITE_ALLOW_TWEET_ATTACHMENT_PRICE.toLocaleLowerCase() === 'true')
-const allowTweetVisibility = (import.meta.env.VITE_ALLOW_TWEET_VISIBILITY.toLocaleLowerCase() === 'true')
+const allowTweetVisibility = ref(import.meta.env.VITE_ALLOW_TWEET_VISIBILITY.toLowerCase() === 'true')
 const uploadGateway = import.meta.env.VITE_HOST + '/v1/attachment';
-const uploadToken = ref();
+
+const uploadToken = computed(() => {
+    return 'Bearer ' + localStorage.getItem('PAOPAO_TOKEN');
+});
+
+const visibilities = computed(()=> {
+    let res = [
+        {value: VisibilityEnum.PUBLIC, label: "公开"},
+        {value: VisibilityEnum.PRIVATE, label: "私密"},
+        {value: VisibilityEnum.Following, label: "关注可见"},
+    ];
+    if (store.state.profile.useFriendship) {
+        res.push({value: VisibilityEnum.FRIEND, label: "好友可见"});
+    }
+    return res;
+});
 
 const switchLink = () => {
     showLinkSet.value = !showLinkSet.value;
@@ -340,7 +357,7 @@ const loadSuggestionUsers = debounce((k) => {
     })
         .then((res) => {
             let options: MentionOption[] = [];
-            res.map((i) => {
+            res.suggest.map((i) => {
                 options.push({
                     label: i,
                     value: i,
@@ -361,7 +378,7 @@ const loadSuggestionTags = debounce((k) => {
     })
         .then((res) => {
             let options: MentionOption[] = [];
-            res.map((i) => {
+            res.suggest.map((i) => {
                 options.push({
                     label: i,
                     value: i,
@@ -387,27 +404,36 @@ const handleSearch = (k: string, prefix: string) => {
     }
 };
 const changeContent = (v: string) => {
-    if (v.length > 200) {
-        return;
+    if (v.length > store.state.profile.defaultTweetMaxLength) {
+        content.value = v.substring(0, store.state.profile.defaultTweetMaxLength);
+    } else {
+        content.value = v;
     }
-    content.value = v;
 };
 const setUploadType = (type: string) => {
     uploadType.value = type;
 };
 
 const updateUpload = (list: UploadFileInfo[]) => {
+    for (let i = 0; i < list.length; i++) {
+        var name = list[i].name;
+        var basename: string = name.split('.').slice(0, -1).join('.');
+        var ext: string = name.split('.').pop()!;
+        if (basename.length > 30) {
+            list[i].name = basename.substring(0, 18) + "..." + basename.substring(basename.length-9) + "." + ext;
+        }
+    }
     fileQueue.value = list;
 };
 const beforeUpload = async (data: any) => {
     // 图片类型校验
     if (
         uploadType.value === 'public/image' &&
-        !['image/png', 'image/jpg', 'image/jpeg', 'image/gif'].includes(
+        !['image/webp', 'image/png', 'image/jpg', 'image/jpeg', 'image/gif'].includes(
             data.file.file?.type
         )
     ) {
-        window.$message.warning('图片仅允许 png/jpg/gif 格式');
+        window.$message.warning('图片仅允许 webp/png/jpg/gif 格式');
         return false;
     }
 
@@ -432,11 +458,9 @@ const beforeUpload = async (data: any) => {
         window.$message.warning('视频大小不能超过100MB');
         return false;
     }
-
     // 附件类型校验
     if (
-        uploadType.value === 'attachment' &&
-        !['application/zip'].includes(data.file.file?.type)
+        uploadType.value === 'attachment' && !(await isZipFile(data.file.file))
     ) {
         window.$message.warning('附件仅允许 zip 格式');
         return false;
@@ -586,7 +610,7 @@ const submitPost = () => {
             imageContents.value = [];
             videoContents.value = [];
             attachmentContents.value = [];
-            visitType.value = defaultVisitType.value;;
+            visitType.value = defaultVisitType.value;
         })
         .catch((err) => {
             submitting.value = false;
@@ -597,16 +621,17 @@ const triggerAuth = (key: string) => {
     store.commit('triggerAuthKey', key);
 };
 onMounted(() => {
-    if (import.meta.env.VITE_DEFAULT_TWEET_VISIBILITY.toLowerCase() === 'friend') {
+    const defaultVisibility = store.state.profile.defaultTweetVisibility
+    if (store.state.profile.useFriendship && defaultVisibility === 'friend') {
         defaultVisitType.value = VisibilityEnum.FRIEND
-    } else if (import.meta.env.VITE_DEFAULT_TWEET_VISIBILITY.toLowerCase()  === 'public') {
+    } else if (defaultVisibility  === 'following') {
+        defaultVisitType.value = VisibilityEnum.Following
+    } else if (defaultVisibility === 'public') {
         defaultVisitType.value = VisibilityEnum.PUBLIC
     } else {
         defaultVisitType.value = VisibilityEnum.PRIVATE
     }
-
     visitType.value = defaultVisitType.value;
-    uploadToken.value = 'Bearer ' + localStorage.getItem('PAOPAO_TOKEN');
 });
 </script>
 
@@ -652,6 +677,15 @@ onMounted(() => {
     .eye-wrap {
         margin-left: 64px;
     }
+    .login-only-wrap {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        button {
+            margin: 0 4px;
+            width: 50%
+        }
+    }
     .login-wrap {
         display: flex;
         justify-content: center;
@@ -670,6 +704,11 @@ onMounted(() => {
     margin-left: 42px;
     .n-upload-file-info__thumbnail {
         overflow: hidden;
+    }
+}
+.dark {
+    .compose-wrap {
+        background-color: rgba(16, 16, 20, 0.75);
     }
 }
 </style>
